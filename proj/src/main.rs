@@ -26,10 +26,9 @@ fn main() {
 
     let filename = matches.value_of("INPUT").unwrap();
     let contents = read_file(filename).unwrap();
-    let testing_blocks = generate_tests(filename, contents);
 
-    for block in testing_blocks.iter() {
-        block.run();
+    for block in generate_tests(filename, contents).into_iter() {
+        block.consume();
     }
 }
 
@@ -46,6 +45,7 @@ pub struct Function {
 pub struct Block {
     pub file: String,
     pub function: Function,
+    pub globals: String,
     pub test: String,
 }
 
@@ -77,6 +77,7 @@ impl Block {
         Block {
             file: file.to_string(),
             function: Function::new(),
+            globals: String::new(),
             test: String::new(),
         }
     }
@@ -90,8 +91,8 @@ impl Block {
         self.test.push('\n');
     }
 
-    pub fn run(&self) {
-        create_test_file(self);
+    pub fn consume(mut self) {
+        create_test_file(&self);
 
         for line in self.test.split('\n') {
             if line == "" {
@@ -99,12 +100,15 @@ impl Block {
             }
 
             if !line.starts_with("assert_eq!") {
+                self.globals.push_str(line);
+                self.globals.push('\n');
                 continue;
             }
             let ass = Assert::new(line);
             let i = ass.left.find('(').unwrap();
             let node_cmd = format!(
-                "node -e 'require(\"./o.js\"){}'",
+                "node -e '{} require(\"./o.js\"){}'",
+                self.globals,
                 ass.left.chars().skip(i).collect::<String>()
             );
             let proc = if cfg!(target_os = "windows") {
