@@ -6,12 +6,13 @@ use clap::{App, Arg};
 use colored::*;
 use regex::Regex;
 
-use std::fs::File;
+use std::fs::{self, DirEntry, File};
 use std::io;
 use std::io::prelude::*;
+use std::path::Path;
 use std::process::Command;
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let matches = App::new("Inline Rust Testing for Native Javascript")
         .version("0.1")
         .author("Pontus L. <pontus.laestadius@gmail.com>")
@@ -25,11 +26,42 @@ fn main() {
         .get_matches();
 
     let filename = matches.value_of("INPUT").unwrap();
-    let contents = read_file(filename).unwrap();
 
-    for block in generate_tests(filename, contents).into_iter() {
-        block.consume();
+    if !filename.ends_with(".js") {
+        let fun = |de: &DirEntry| {
+            test(de.path().to_str().unwrap());
+        };
+        visit_dirs(&Path::new(filename), &fun);
+    } else {
+        test(filename);
     }
+
+    Ok(())
+}
+
+fn test(f: &str) -> std::result::Result<(), std::io::Error> {
+    if f.ends_with(".js") {
+        let contents = read_file(f)?;
+        for block in generate_tests(f, contents).into_iter() {
+            block.consume();
+        }
+    }
+    Ok(())
+}
+
+fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry)) -> io::Result<()> {
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                visit_dirs(&path, cb)?;
+            } else {
+                cb(&entry);
+            }
+        }
+    }
+    Ok(())
 }
 
 pub struct Assert {
@@ -105,7 +137,7 @@ impl Block {
                 continue;
             }
             let ass = Assert::new(line);
-            let i = ass.left.find('(').unwrap();
+            let i = ass.left.find('(').unwrap_or(0);
             let node_cmd = format!(
                 "node -e '{} require(\"./o.js\"){}'",
                 self.globals,
@@ -125,12 +157,15 @@ impl Block {
             };
             println!("{}", String::from_utf8_lossy(&proc.stderr).red());
             let res = String::from_utf8_lossy(&proc.stdout);
+
+                print!("test {} - {} ... ", line, self.file);
             if res != ass.right {
-                println!("test {} - {} ... {}", line, self.file, "FAILED".red());
-                panic!("test failed. left: '{}', right: '{}'", res, ass.right);
+                print!("{}", "FAILED".red());
+                //panic!("test failed. left: '{}', right: '{}'", res, ass.right);
             }
-            println!("test {} - {} ... {}", line, self.file, "ok".green());
+            print!("{}", "ok".green());
         }
+        println!();
     }
 }
 
@@ -146,7 +181,6 @@ fn generate_tests(filename: &str, contents: String) -> Vec<Block> {
     let mut FUNCTION_CAPTURE = false;
     for line in contents.split('\n') {
         if FUNCTION_CAPTURE {
-            println!("{}", line);
             block.function.cont.push_str(line);
             block.function.cont.push('\n');
             if line == "}" {
@@ -155,7 +189,6 @@ fn generate_tests(filename: &str, contents: String) -> Vec<Block> {
                 block = Block::new(filename);
             }
         } else if line.contains(BLOCK_MARKER) {
-            println!("{}", line.magenta());
 
             IN_BLOCK = !IN_BLOCK;
             if IN_BLOCK {
@@ -166,7 +199,6 @@ fn generate_tests(filename: &str, contents: String) -> Vec<Block> {
                 FUNCTION_CAPTURE = true;
             }
         } else if IN_BLOCK {
-            println!("{}", line.green());
             block.push_test_line(line);
         }
     }
@@ -199,3 +231,4 @@ fn create_test_file(block: &Block) -> Result<(), io::Error> {
     }
     Ok(())
 }
+
