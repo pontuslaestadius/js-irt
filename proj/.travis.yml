@@ -1,0 +1,17 @@
+cache: cargo
+language: rust
+rust:
+  - nightly
+before_script:
+  - rustup component add rustfmt-preview
+  - rustup component add clippy-preview
+script:
+  - cargo +nightly fmt --all -- --check
+  - cargo +nightly clippy --verbose
+  - cargo build --verbose --all
+  - cargo test --verbose --all
+
+branches:
+  only:
+  - master
+
