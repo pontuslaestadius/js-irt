@@ -119,7 +119,11 @@ impl Block {
     }
 
     pub fn push_test_line(&mut self, line: &str) {
-        self.test.push_str(line_trim(line));
+        let line = line_trim(line);
+        if line == "" {
+            return;
+        }
+        self.test.push_str(line);
         self.test.push('\n');
     }
 
@@ -128,9 +132,8 @@ impl Block {
 
         for line in self.test.split('\n') {
             if line == "" {
-                continue;
+                return;
             }
-
             if !line.starts_with("assert_eq!") {
                 self.globals.push_str(line);
                 self.globals.push('\n');
@@ -155,22 +158,34 @@ impl Block {
                     .output()
                     .expect("failed to execute process")
             };
-            println!("{}", String::from_utf8_lossy(&proc.stderr).red());
-            let res = String::from_utf8_lossy(&proc.stdout);
+            let stdout = String::from_utf8_lossy(&proc.stdout);
+            let stderr = String::from_utf8_lossy(&proc.stderr);
 
-                print!("test {} - {} ... ", line, self.file);
-            if res != ass.right {
-                print!("{}", "FAILED".red());
-                //panic!("test failed. left: '{}', right: '{}'", res, ass.right);
+            print!("test {} - {} ... ", line, self.file);
+            if stdout != ass.right {
+                println!("{} -> left: '{}', right: '{}'", "FAILED".red(), stdout, ass.right);
+                if stderr != "" {
+                    println!("\n{}", stderr.red());
+                }
+            } else {
+                println!("{}", "ok".green());
             }
-            print!("{}", "ok".green());
         }
-        println!();
     }
 }
 
-fn line_trim(line: &str) -> &str {
-    line.trim_start().trim_start_matches("/// ")
+/// # Examples
+///
+/// ```
+/// let before = "/// Hello World // foo bar";
+/// assert_eq(line_trim(before), "Hello World");
+/// ```
+pub fn line_trim(line: &str) -> &str {
+    let re = Regex::new(r"(?:///)[ ](.+)[^[//]]").unwrap();
+    for caps in re.captures_iter(line) {
+        return caps.get(1).unwrap().as_str();
+    }
+    line
 }
 
 fn generate_tests(filename: &str, contents: String) -> Vec<Block> {
@@ -189,7 +204,6 @@ fn generate_tests(filename: &str, contents: String) -> Vec<Block> {
                 block = Block::new(filename);
             }
         } else if line.contains(BLOCK_MARKER) {
-
             IN_BLOCK = !IN_BLOCK;
             if IN_BLOCK {
                 if FUNCTION_CAPTURE {
