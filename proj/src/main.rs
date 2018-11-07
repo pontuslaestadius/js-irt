@@ -3,17 +3,18 @@ extern crate colored;
 extern crate regex;
 
 use clap::{App, Arg};
-use colored::*;
 use regex::Regex;
 
 pub mod assert;
+pub mod parser;
+pub mod util;
+pub mod test_result;
 
-use self::assert::*;
+use self::parser::*;
 use std::fs::{self, DirEntry, File};
 use std::io;
 use std::io::prelude::*;
 use std::path::Path;
-use std::process::Command;
 
 fn main() -> std::io::Result<()> {
     let matches = App::new("Inline Rust Testing for Native Javascript")
@@ -46,7 +47,11 @@ fn test(f: &str) -> std::result::Result<(), std::io::Error> {
     if f.ends_with(".js") {
         let contents = read_file(f)?;
         for block in generate_tests(f, contents).into_iter() {
-            block.consume();
+            create_test_file(&block);
+            let test_results = block.consume();
+            for test_result in test_results.iter() {
+                test_result.output();
+            }
         }
     }
     Ok(())
@@ -65,118 +70,6 @@ fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry)) -> io::Result<()> {
         }
     }
     Ok(())
-}
-
-pub struct Function {
-    pub params: Vec<String>,
-    pub cont: String,
-}
-
-pub struct Block {
-    pub file: String,
-    pub function: Function,
-    pub globals: String,
-    pub test: String,
-}
-
-impl Function {
-    fn new() -> Self {
-        Function {
-            params: Vec::new(),
-            cont: String::new(),
-        }
-    }
-}
-
-impl Block {
-    fn new(file: &str) -> Self {
-        Block {
-            file: file.to_string(),
-            function: Function::new(),
-            globals: String::new(),
-            test: String::new(),
-        }
-    }
-
-    pub fn new_test(&mut self, line: &str) {
-        // TODO
-    }
-
-    pub fn push_test_line(&mut self, line: &str) {
-        let line = line_trim(line);
-        if line == "" {
-            return;
-        }
-        self.test.push_str(line);
-        self.test.push('\n');
-    }
-
-    pub fn consume(mut self) {
-        create_test_file(&self);
-
-        for line in self.test.split('\n') {
-            if line == "" {
-                return;
-            }
-            let opt = Assert::parse(line);
-            if opt.is_none() {
-                self.globals.push_str(line);
-                self.globals.push('\n');
-                continue;
-            }
-            let mut ass = opt.unwrap();
-            let i = ass.left.find('(').unwrap_or(0);
-            let node_cmd = format!(
-                "node -e '{} require(\"./o.js\"){}'",
-                self.globals,
-                ass.left.chars().skip(i).collect::<String>()
-            );
-            let proc = if cfg!(target_os = "windows") {
-                Command::new("cmd")
-                    .args(&["/C", node_cmd.as_str()])
-                    .output()
-                    .expect("failed to execute process")
-            } else {
-                Command::new("sh")
-                    .arg("-c")
-                    .arg(node_cmd.as_str())
-                    .output()
-                    .expect("failed to execute process")
-            };
-            let stdout = String::from_utf8_lossy(&proc.stdout);
-            let stderr = String::from_utf8_lossy(&proc.stderr);
-
-            print!("test {} - {} ... ", line, self.file);
-            ass.left = stdout.to_string();
-            if !ass.resolve() {
-                println!(
-                    "{} -> left: '{}', right: '{}'",
-                    "FAILED".red(),
-                    stdout,
-                    ass.right
-                );
-                if stderr != "" {
-                    println!("\n{}", stderr.red());
-                }
-            } else {
-                println!("{}", "ok".green());
-            }
-        }
-    }
-}
-
-/// # Examples
-///
-/// ```
-/// let before = "/// Hello World // foo bar";
-/// assert_eq(line_trim(before), "Hello World");
-/// ```
-pub fn line_trim(line: &str) -> &str {
-    let re = Regex::new(r"(?:///)[ ](.+)[^[//]]").unwrap();
-    for caps in re.captures_iter(line) {
-        return caps.get(1).unwrap().as_str();
-    }
-    line
 }
 
 fn generate_tests(filename: &str, contents: String) -> Vec<Block> {
