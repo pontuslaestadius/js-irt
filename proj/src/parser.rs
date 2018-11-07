@@ -63,12 +63,22 @@ impl Block {
                 continue;
             }
             let mut ass = opt.unwrap();
-            let i = ass.left.find('(').unwrap_or(0);
+            let i = ass.left.find('(');
+
+            let eval = if i.is_some() {
+                format!("require(\"./o.js\"){}", 
+                    ass.left.chars().skip(i.unwrap()).collect::<String>())
+            } else {
+                format!("process.stdout.write(\"\" + {})", ass.left)
+            };
+            let i = i.unwrap_or(0);
+
             let node_cmd = format!(
-                "node -e '{} require(\"./o.js\"){}'",
+                "node -e '{} {};'",
                 self.globals,
-                ass.left.chars().skip(i).collect::<String>()
+                eval,
             );
+            //println!("{}", node_cmd);
             let proc = if cfg!(target_os = "windows") {
                 Command::new("cmd")
                     .args(&["/C", node_cmd.as_str()])
