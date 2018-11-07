@@ -6,6 +6,9 @@ use clap::{App, Arg};
 use colored::*;
 use regex::Regex;
 
+pub mod assert;
+
+use self::assert::*;
 use std::fs::{self, DirEntry, File};
 use std::io;
 use std::io::prelude::*;
@@ -64,11 +67,6 @@ fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry)) -> io::Result<()> {
     Ok(())
 }
 
-pub struct Assert {
-    left: String,
-    right: String,
-}
-
 pub struct Function {
     pub params: Vec<String>,
     pub cont: String,
@@ -79,20 +77,6 @@ pub struct Block {
     pub function: Function,
     pub globals: String,
     pub test: String,
-}
-
-impl Assert {
-    pub fn new(line: &str) -> Self {
-        let re = Regex::new(r"(?:assert_eq!)\((.+),[ ](.+)(?:\))").unwrap();
-        let mut fmt = line.to_string();
-        for caps in re.captures_iter(line) {
-            return Assert {
-                left: caps.get(1).unwrap().as_str().to_string(),
-                right: caps.get(2).unwrap().as_str().to_string(),
-            };
-        }
-        panic!("No assert pattern found!")
-    }
 }
 
 impl Function {
@@ -134,12 +118,13 @@ impl Block {
             if line == "" {
                 return;
             }
-            if !line.starts_with("assert_eq!") {
+            let opt = Assert::parse(line);
+            if opt.is_none() {
                 self.globals.push_str(line);
                 self.globals.push('\n');
                 continue;
             }
-            let ass = Assert::new(line);
+            let mut ass = opt.unwrap();
             let i = ass.left.find('(').unwrap_or(0);
             let node_cmd = format!(
                 "node -e '{} require(\"./o.js\"){}'",
@@ -162,8 +147,14 @@ impl Block {
             let stderr = String::from_utf8_lossy(&proc.stderr);
 
             print!("test {} - {} ... ", line, self.file);
-            if stdout != ass.right {
-                println!("{} -> left: '{}', right: '{}'", "FAILED".red(), stdout, ass.right);
+            ass.left = stdout.to_string();
+            if !ass.resolve() {
+                println!(
+                    "{} -> left: '{}', right: '{}'",
+                    "FAILED".red(),
+                    stdout,
+                    ass.right
+                );
                 if stderr != "" {
                     println!("\n{}", stderr.red());
                 }
@@ -245,4 +236,3 @@ fn create_test_file(block: &Block) -> Result<(), io::Error> {
     }
     Ok(())
 }
-
