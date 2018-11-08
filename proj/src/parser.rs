@@ -74,7 +74,8 @@ impl Block {
             let i = i.unwrap_or(0);
 
             let node_cmd = format!(
-                "node -e '{} {};'",
+                "node -e '{} {} {};'",
+                self.function.cont,
                 self.globals,
                 eval,
             );
