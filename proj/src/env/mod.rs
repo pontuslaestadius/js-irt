@@ -1,8 +1,8 @@
-extern crate colored;
 extern crate regex;
+extern crate time;
+use time::PreciseTime;
 
 use regex::Regex;
-
 use super::parser::*;
 use std::fs::{self, DirEntry, OpenOptions};
 use std::io::prelude::*;
@@ -23,6 +23,7 @@ pub fn read(filename: &str) -> Result<(), Error> {
 }
 
 pub fn test(f: &str) -> std::result::Result<(), Error> {
+    //let start = PreciseTime::now();
     if f.ends_with(".js") && !f.ends_with(".min.js") {
         let contents = read_file(f)?;
         for block in generate_tests(f, &contents).into_iter() {
@@ -37,6 +38,7 @@ pub fn test(f: &str) -> std::result::Result<(), Error> {
             });
         }
     }
+    //let end = PreciseTime::now();
     Ok(())
 }
 
@@ -65,7 +67,7 @@ pub fn generate_tests(filename: &str, contents: &str) -> Vec<Block> {
         if function_capture {
             block.function.cont.push_str(line);
             block.function.cont.push('\n');
-            if line == "}" {
+            if line.starts_with("}") {
                 function_capture = false;
                 blocks.push(block);
                 block = Block::new(filename);
