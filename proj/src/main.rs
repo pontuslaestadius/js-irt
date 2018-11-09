@@ -8,7 +8,7 @@ pub mod assert;
 pub mod env;
 pub mod parser;
 pub mod test_result;
-pub mod util;
+pub mod tools;
 
 fn main() -> std::io::Result<()> {
     let matches = App::new("Inline Rust Testing for Native Javascript")

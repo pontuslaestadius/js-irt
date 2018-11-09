@@ -1,7 +1,7 @@
 extern crate colored;
 use super::assert::*;
 use super::test_result::*;
-use super::util::*;
+use super::tools::*;
 use std::process::Command;
 
 pub struct Function {
@@ -44,12 +44,13 @@ impl Block {
     }
 
     pub fn push_test_line(&mut self, line: &str) {
-        let line = line_trim(line);
-        if line == "" {
-            return;
-        }
-        self.test.push_str(line);
-        self.test.push('\n');
+        match line_trim(line) {
+            "" => (),
+            l => {
+                self.test.push_str(l);
+                self.test.push('\n');
+            },
+        };
     }
 
     pub fn resolve(mut self) -> Vec<TestResult> {
