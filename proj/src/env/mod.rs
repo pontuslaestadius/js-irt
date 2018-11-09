@@ -4,7 +4,7 @@ extern crate regex;
 use regex::Regex;
 
 use super::parser::*;
-use std::fs::{self, DirEntry, File, OpenOptions};
+use std::fs::{self, DirEntry, OpenOptions};
 use std::io::prelude::*;
 use std::io::Error;
 use std::path::Path;
@@ -72,11 +72,7 @@ pub fn generate_tests(filename: &str, contents: &str) -> Vec<Block> {
             }
         } else if line.contains(block_marker) {
             in_block = !in_block;
-            if in_block {
-                if function_capture {
-                    panic!("New code block captured while in function capture");
-                }
-            } else {
+            if !in_block {
                 function_capture = true;
             }
         } else if in_block {
@@ -94,30 +90,22 @@ pub fn read_file(file_path: &str) -> Result<String, Error> {
     Ok(contents)
 }
 
-pub fn append_test_to_file(file_path: &str, append: &str) {
+pub fn append_test_to_file(file_path: &str, append: &str) -> Result<(), Error> {
     let mut file = OpenOptions::new()
         .write(true)
         .append(true)
-        .open(file_path)
-        .unwrap();
-
-    if let Err(e) = writeln!(file, "\n// ##AUTOGEN##\n") {
-        eprintln!("Couldn't write to file: {}", e);
-    };
-    if let Err(e) = writeln!(file, "{}", append) {
-        eprintln!("Couldn't write to file: {}", e);
-    };
-}
-
-pub fn retract_test_from_file(_file_path: &str) {
-    // TODO
+        .open(file_path)?;
+    Ok(writeln!(file, "{}", append)?)
 }
 
 pub fn create_test_file(block: &Block) -> Result<(), Error> {
-    let mut file = File::create("o.js")?;
-    file.write_all(block.function.cont.as_bytes())?;
+    let dest = "o.js";
+    fs::copy(block.file.as_str(), dest)?;
     let formatted = format!("module.exports={0}", block.function.cont);
     let re = Regex::new(r"(return )([^;]+)(;.?)").unwrap();
+
+    let mut s = String::new();
+    s.push_str(&block.function.cont);
 
     for line in formatted.split('\n') {
         let mut fmt = line.to_string();
@@ -127,8 +115,10 @@ pub fn create_test_file(block: &Block) -> Result<(), Error> {
                 caps.get(2).unwrap().as_str()
             );
         }
-        let _ = file.write(&[b'\n'])?;
-        file.write_all(fmt.as_bytes())?;
+        s.push('\n');
+        s.push_str(&fmt);
     }
+
+    append_test_to_file(dest, s.as_str());
     Ok(())
 }
