@@ -13,13 +13,13 @@ use std::thread;
 use std::time::Duration;
 
 pub fn read(filename: &str) -> Result<(), Error> {
-    let res = if !filename.ends_with(".js") {
+    if !filename.ends_with(".js") {
         let fun = |de: &DirEntry| -> Result<(), Error> { test(de.path().to_str().unwrap()) };
         visit_dirs(&Path::new(filename), &fun)?
     } else {
         test(filename)?
-    };
-    Ok(res)
+    }
+    Ok(())
 }
 
 pub fn test(f: &str) -> std::result::Result<(), Error> {
@@ -95,7 +95,8 @@ pub fn append_test_to_file(file_path: &str, append: &str) -> Result<(), Error> {
         .write(true)
         .append(true)
         .open(file_path)?;
-    Ok(writeln!(file, "{}", append)?)
+    writeln!(file, "{}", append)?;
+    Ok(())
 }
 
 pub fn create_test_file(block: &Block) -> Result<(), Error> {
@@ -118,7 +119,6 @@ pub fn create_test_file(block: &Block) -> Result<(), Error> {
         s.push('\n');
         s.push_str(&fmt);
     }
-
-    append_test_to_file(dest, s.as_str());
+    append_test_to_file(dest, s.as_str())?;
     Ok(())
 }
