@@ -3,13 +3,12 @@ extern crate colored;
 extern crate regex;
 
 use clap::{App, Arg};
-use regex::Regex;
 
 pub mod assert;
-pub mod parser;
-pub mod util;
-pub mod test_result;
 pub mod env;
+pub mod parser;
+pub mod test_result;
+pub mod util;
 
 fn main() -> std::io::Result<()> {
     let matches = App::new("Inline Rust Testing for Native Javascript")
@@ -25,7 +24,6 @@ fn main() -> std::io::Result<()> {
         .get_matches();
 
     let filename = matches.value_of("INPUT").unwrap();
-    env::read(filename);
+    env::read(filename)?;
     Ok(())
 }
-

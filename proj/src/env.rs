@@ -4,37 +4,43 @@ extern crate regex;
 use regex::Regex;
 
 use super::parser::*;
-use std::fs::{self, DirEntry, File};
-use std::io;
+use std::fs::{self, DirEntry, File, OpenOptions};
 use std::io::prelude::*;
+use std::io::Error;
 use std::path::Path;
+use std::result::Result;
+use std::thread;
+use std::time::Duration;
 
-pub fn read(filename: &str) {
-    if !filename.ends_with(".js") {
-        let fun = |de: &DirEntry| {
-            test(de.path().to_str().unwrap());
-        };
-        visit_dirs(&Path::new(filename), &fun);
+pub fn read(filename: &str) -> Result<(), Error> {
+    let res = if !filename.ends_with(".js") {
+        let fun = |de: &DirEntry| -> Result<(), Error> { test(de.path().to_str().unwrap()) };
+        visit_dirs(&Path::new(filename), &fun)?
     } else {
-        test(filename);
-    }
+        test(filename)?
+    };
+    Ok(res)
 }
 
-pub fn test(f: &str) -> std::result::Result<(), std::io::Error> {
-    if f.ends_with(".js") {
+pub fn test(f: &str) -> std::result::Result<(), Error> {
+    if f.ends_with(".js") && !f.ends_with(".min.js") {
         let contents = read_file(f)?;
-        for block in generate_tests(f, contents).into_iter() {
-            create_test_file(&block);
-            let test_results = block.consume();
-            for test_result in test_results.iter() {
-                test_result.output();
-            }
+        for block in generate_tests(f, &contents).into_iter() {
+            create_test_file(&block)?;
+            let test_results = block.resolve();
+
+            thread::spawn(move || {
+                for test_result in test_results.iter() {
+                    test_result.output();
+                    thread::sleep(Duration::from_millis(25));
+                }
+            });
         }
     }
     Ok(())
 }
 
-pub fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry)) -> io::Result<()> {
+pub fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry) -> Result<(), Error>) -> Result<(), Error> {
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
@@ -49,47 +55,67 @@ pub fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry)) -> io::Result<()> {
     Ok(())
 }
 
-pub fn generate_tests(filename: &str, contents: String) -> Vec<Block> {
+pub fn generate_tests(filename: &str, contents: &str) -> Vec<Block> {
     let mut blocks: Vec<Block> = Vec::new();
     let mut block: Block = Block::new(filename);
-    let BLOCK_MARKER = "```";
-    let mut IN_BLOCK = false;
-    let mut FUNCTION_CAPTURE = false;
+    let block_marker = "```";
+    let mut in_block = false;
+    let mut function_capture = false;
     for line in contents.split('\n') {
-        if FUNCTION_CAPTURE {
+        if function_capture {
             block.function.cont.push_str(line);
             block.function.cont.push('\n');
             if line == "}" {
-                FUNCTION_CAPTURE = false;
+                function_capture = false;
                 blocks.push(block);
                 block = Block::new(filename);
             }
-        } else if line.contains(BLOCK_MARKER) {
-            IN_BLOCK = !IN_BLOCK;
-            if IN_BLOCK {
-                if FUNCTION_CAPTURE {
+        } else if line.contains(block_marker) {
+            in_block = !in_block;
+            if in_block {
+                if function_capture {
                     panic!("New code block captured while in function capture");
                 }
             } else {
-                FUNCTION_CAPTURE = true;
+                function_capture = true;
             }
-        } else if IN_BLOCK {
+        } else if in_block {
             block.push_test_line(line);
         }
     }
     blocks
 }
 
-pub fn read_file(file_path: &str) -> Result<String, io::Error> {
-    let mut f = File::open(file_path)?;
+pub fn read_file(file_path: &str) -> Result<String, Error> {
+    let mut file = OpenOptions::new().read(true).open(file_path).unwrap();
+
     let mut contents = String::new();
-    f.read_to_string(&mut contents)?;
+    file.read_to_string(&mut contents)?;
     Ok(contents)
 }
 
-pub fn create_test_file(block: &Block) -> Result<(), io::Error> {
+pub fn append_test_to_file(file_path: &str, append: &str) {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .append(true)
+        .open(file_path)
+        .unwrap();
+
+    if let Err(e) = writeln!(file, "\n// ##AUTOGEN##\n") {
+        eprintln!("Couldn't write to file: {}", e);
+    };
+    if let Err(e) = writeln!(file, "{}", append) {
+        eprintln!("Couldn't write to file: {}", e);
+    };
+}
+
+pub fn retract_test_from_file(_file_path: &str) {
+    // TODO
+}
+
+pub fn create_test_file(block: &Block) -> Result<(), Error> {
     let mut file = File::create("o.js")?;
-    file.write_all(block.function.cont.as_bytes());
+    file.write_all(block.function.cont.as_bytes())?;
     let formatted = format!("module.exports={0}", block.function.cont);
     let re = Regex::new(r"(return )([^;]+)(;.?)").unwrap();
 
@@ -101,9 +127,8 @@ pub fn create_test_file(block: &Block) -> Result<(), io::Error> {
                 caps.get(2).unwrap().as_str()
             );
         }
-        file.write(&[b'\n']);
-        file.write_all(fmt.as_bytes());
+        let _ = file.write(&[b'\n'])?;
+        file.write_all(fmt.as_bytes())?;
     }
     Ok(())
 }
-

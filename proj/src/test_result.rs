@@ -1,7 +1,6 @@
-
 extern crate colored;
-use colored::*;
 use super::assert::*;
+use colored::*;
 
 pub struct TestResult {
     assert: Assert,
@@ -39,4 +38,3 @@ impl TestResult {
         }
     }
 }
-

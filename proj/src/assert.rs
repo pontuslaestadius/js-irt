@@ -1,6 +1,5 @@
 extern crate regex;
 use regex::Regex;
-use std::io;
 
 #[derive(Debug)]
 pub enum AssertType {
@@ -23,12 +22,15 @@ impl Assert {
         };
         for caps in re.unwrap().captures_iter(line) {
             return Assert {
-                assert_type: assert_type,
+                assert_type,
                 left: caps.get(1).unwrap().as_str().to_string(),
                 right: caps.get(2).unwrap().as_str().to_string().trim().to_string(),
             };
         }
-        panic!("No assert pattern found for: {} type: {:?}", line, assert_type)
+        panic!(
+            "No assert pattern found for: {} type: {:?}",
+            line, assert_type
+        )
     }
 
     /// # Examples
