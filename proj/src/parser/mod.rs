@@ -49,7 +49,7 @@ impl Block {
             l => {
                 self.test.push_str(l);
                 self.test.push('\n');
-            },
+            }
         };
     }
 

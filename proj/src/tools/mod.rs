@@ -6,4 +6,3 @@ pub fn line_trim(line: &str) -> &str {
     let cap = re.captures(line).unwrap();
     cap.get(1).unwrap().as_str()
 }
-

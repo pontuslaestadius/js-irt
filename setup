@@ -2,4 +2,7 @@
 
 REPOROOT="$(git rev-parse --show-toplevel)"
 cp $REPOROOT/hooks/* $REPOROOT/.git/hooks/
+for f in $REPOROOT/.git/hooks; do
+    chmod 777 $f
+done
 
