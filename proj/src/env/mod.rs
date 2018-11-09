@@ -48,7 +48,7 @@ pub fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry) -> Result<(), Error>) -> Result
             if path.is_dir() {
                 visit_dirs(&path, cb)?;
             } else {
-                cb(&entry);
+                cb(&entry)?;
             }
         }
     }

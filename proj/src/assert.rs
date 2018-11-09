@@ -20,17 +20,12 @@ impl Assert {
             AssertType::Tr => Regex::new(r"!\((.+)(\))"),
             _ => Regex::new(r"_(?:eq|ne)!\((.+),(.+)\)"),
         };
-        for caps in re.unwrap().captures_iter(line) {
-            return Assert {
-                assert_type,
-                left: caps.get(1).unwrap().as_str().to_string(),
-                right: caps.get(2).unwrap().as_str().to_string().trim().to_string(),
-            };
+        let cap = re.unwrap().captures(line).unwrap();
+        Assert {
+            assert_type,
+            left: cap.get(1).unwrap().as_str().to_string(),
+            right: cap.get(2).unwrap().as_str().to_string().trim().to_string(),
         }
-        panic!(
-            "No assert pattern found for: {} type: {:?}",
-            line, assert_type
-        )
     }
 
     /// # Examples

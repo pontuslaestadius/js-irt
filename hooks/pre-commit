@@ -1,0 +1,5 @@
+#!/bin/bash
+cd $(git rev-parse --show-toplevel)/proj
+cargo fmt &&
+cargo clippy &&
+cargo check
