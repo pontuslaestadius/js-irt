@@ -2,4 +2,4 @@
 *.swp
 Cargo.lock
 **/*.rs.bk
-o.js
+*.out.*

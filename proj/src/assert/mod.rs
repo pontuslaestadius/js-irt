@@ -1,5 +1,8 @@
 extern crate regex;
+
+
 use regex::Regex;
+
 
 #[derive(Debug)]
 pub enum AssertType {
@@ -15,11 +18,13 @@ pub struct Assert {
 }
 
 impl Assert {
+
     fn new(line: &str, assert_type: AssertType) -> Self {
         let re = match assert_type {
             AssertType::Tr => Regex::new(r"!\((.+)(\))"),
             _ => Regex::new(r"_(?:eq|ne)!\((.+),(.+)\)"),
         };
+        // FIXME: Reduce code complexity.
         let cap = re.unwrap().captures(line).unwrap();
         Assert {
             assert_type,
@@ -53,6 +58,7 @@ impl Assert {
         }
     }
 
+    // TODO: Make a parser.rs and derive this into a switch case.
     pub fn parse(line: &str) -> Option<Self> {
         if line.starts_with("assert!") {
             Some(Assert::new(line, AssertType::Tr))

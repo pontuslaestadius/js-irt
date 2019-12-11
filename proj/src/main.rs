@@ -12,12 +12,12 @@ pub mod tools;
 
 fn main() -> std::io::Result<()> {
     let matches = App::new("Inline Rust Testing for Native Javascript")
-        .version("0.1")
+        .version("0.1.1")
         .author("Pontus L. <pontus.laestadius@gmail.com>")
         .about("Executes Rust-like testing on JavaScript files.")
         .arg(
             Arg::with_name("INPUT")
-                .help("Sets the input file to use")
+                .help("File to test.")
                 .required(true)
                 .index(1),
         )

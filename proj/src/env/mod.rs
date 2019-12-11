@@ -1,6 +1,5 @@
 extern crate regex;
 extern crate time;
-use time::PreciseTime;
 
 use regex::Regex;
 use super::parser::*;
@@ -10,22 +9,31 @@ use std::io::Error;
 use std::path::Path;
 use std::result::Result;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+
+const BLOCK_MARKER: &str = "```";
+const OUTPUT_FILE: &str = ".irt.out.js";
+
 
 pub fn read(filename: &str) -> Result<(), Error> {
+
     if !filename.ends_with(".js") {
         let fun = |de: &DirEntry| -> Result<(), Error> { test(de.path().to_str().unwrap()) };
         visit_dirs(&Path::new(filename), &fun)?
     } else {
         test(filename)?
     }
+
     Ok(())
 }
 
 pub fn test(f: &str) -> std::result::Result<(), Error> {
-    //let start = PreciseTime::now();
+    let start = Instant::now();
+
     if f.ends_with(".js") && !f.ends_with(".min.js") {
         let contents = read_file(f)?;
+
         for block in generate_tests(f, &contents).into_iter() {
             create_test_file(&block)?;
             let test_results = block.resolve();
@@ -38,7 +46,10 @@ pub fn test(f: &str) -> std::result::Result<(), Error> {
             });
         }
     }
-    //let end = PreciseTime::now();
+
+    let duration = start.elapsed().as_millis();
+    println!("Test took {} ms", duration);
+
     Ok(())
 }
 
@@ -60,27 +71,31 @@ pub fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry) -> Result<(), Error>) -> Result
 pub fn generate_tests(filename: &str, contents: &str) -> Vec<Block> {
     let mut blocks: Vec<Block> = Vec::new();
     let mut block: Block = Block::new(filename);
-    let block_marker = "```";
-    let mut in_block = false;
-    let mut function_capture = false;
+    let mut in_block: bool = false;
+    let mut function_capture: bool = false;
+
     for line in contents.split('\n') {
         if function_capture {
             block.function.cont.push_str(line);
             block.function.cont.push('\n');
+
             if line.starts_with("}") {
                 function_capture = false;
                 blocks.push(block);
                 block = Block::new(filename);
             }
-        } else if line.contains(block_marker) {
+
+        } else if line.contains(BLOCK_MARKER) {
             in_block = !in_block;
             if !in_block {
                 function_capture = true;
             }
+
         } else if in_block {
             block.push_test_line(line);
         }
     }
+
     blocks
 }
 
@@ -89,6 +104,7 @@ pub fn read_file(file_path: &str) -> Result<String, Error> {
 
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
+
     Ok(contents)
 }
 
@@ -97,13 +113,14 @@ pub fn append_test_to_file(file_path: &str, append: &str) -> Result<(), Error> {
         .write(true)
         .append(true)
         .open(file_path)?;
+
     writeln!(file, "{}", append)?;
+
     Ok(())
 }
 
 pub fn create_test_file(block: &Block) -> Result<(), Error> {
-    let dest = "o.js";
-    fs::copy(block.file.as_str(), dest)?;
+    fs::copy(block.file.as_str(), OUTPUT_FILE)?;
     let formatted = format!("module.exports={0}", block.function.cont);
     let re = Regex::new(r"(return )([^;]+)(;.?)").unwrap();
 
@@ -112,15 +129,19 @@ pub fn create_test_file(block: &Block) -> Result<(), Error> {
 
     for line in formatted.split('\n') {
         let mut fmt = line.to_string();
+
         for caps in re.captures_iter(line) {
             fmt = format!(
                 "process.stdout.write(\"\" + ({})); return;",
                 caps.get(2).unwrap().as_str()
             );
         }
+
         s.push('\n');
         s.push_str(&fmt);
     }
-    append_test_to_file(dest, s.as_str())?;
+
+    append_test_to_file(OUTPUT_FILE, s.as_str())?;
+
     Ok(())
 }

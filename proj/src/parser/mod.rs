@@ -4,6 +4,8 @@ use super::test_result::*;
 use super::tools::*;
 use std::process::Command;
 
+const PROCESS_ERROR_MESSAGE: &str = "failed to execute process";
+
 pub struct Function {
     pub params: Vec<String>,
     pub cont: String,
@@ -56,41 +58,49 @@ impl Block {
     pub fn resolve(mut self) -> Vec<TestResult> {
         let mut test_results = Vec::new();
         for line in self.test.split('\n') {
+
             if line == "" {
                 continue;
             }
+
             let opt = Assert::parse(line);
+
             if opt.is_none() {
                 self.globals.push_str(line);
                 self.globals.push('\n');
                 continue;
             }
+
             let mut ass = opt.unwrap();
             let i = ass.left.find('(');
 
             let eval = if i.is_some() {
                 format!(
-                    "require(\"./o.js\"){}",
+                    "require(\"./.irt.out.js\"){}",
                     ass.left.chars().skip(i.unwrap()).collect::<String>()
                 )
             } else {
                 format!("process.stdout.write(\"\" + {})", ass.left)
             };
+
             let node_cmd = format!(
                 "node -e '{} {} {};'",
                 self.function.cont, self.globals, eval,
             );
+
+            println!("Executing: sh -c {}", node_cmd);
+
             let proc = if cfg!(target_os = "windows") {
                 Command::new("cmd")
                     .args(&["/C", node_cmd.as_str()])
                     .output()
-                    .expect("failed to execute process")
+                    .expect(PROCESS_ERROR_MESSAGE)
             } else {
                 Command::new("sh")
                     .arg("-c")
                     .arg(node_cmd.as_str())
                     .output()
-                    .expect("failed to execute process")
+                    .expect(PROCESS_ERROR_MESSAGE)
             };
             ass.left = String::from_utf8_lossy(&proc.stdout).to_string();
             test_results.push(TestResult::new(

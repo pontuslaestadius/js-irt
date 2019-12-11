@@ -2,6 +2,9 @@ extern crate colored;
 use super::assert::*;
 use colored::*;
 
+const PREFIX: &str = "test";
+
+
 pub struct TestResult {
     assert: Assert,
     file: String,
@@ -22,17 +25,23 @@ impl TestResult {
     }
 
     pub fn output(&self) {
-        print!("test {} - {} ... ", self.line, self.file);
+
+        // Wait for test results before we print a new line.
+        print!("{} {} - {} ... ", PREFIX, self.line, self.file);
+
         if !self.assert.resolve() {
+
             println!(
-                "{} -> left: '{}', right: '{}'",
+                "{} -> expected '{}' but got '{}'",
                 "FAILED".red(),
                 self.stdout,
                 self.assert.right
             );
+
             if self.stderr != "" {
                 println!("\n{}", self.stderr.red());
             }
+
         } else {
             println!("{}", "ok".green());
         }
